@@ -1,0 +1,6 @@
+{
+  "sources": [
+    {"id":"ncsc-jordan", "name_ar":"المركز الوطني للأمن السيبراني الأردني", "url":"https://ncsc.jo/AR/List/Security_Warnings_AR", "host":"ncsc.jo", "country":"JO", "enabled":true},
+    {"id":"jofincert", "name_ar":"Jo-FinCERT - البنك المركزي الأردني", "url":"https://www.cbj.gov.jo/AR/Pages/JoFinCert", "host":"www.cbj.gov.jo", "country":"JO", "enabled":true}
+  ]
+}

@@ -1,0 +1,26 @@
+name: Jordan advisory discovery (review required)
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * *' # 08:17 Asia/Amman (UTC+3)
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Discover public source links (unverified)
+        run: python scripts/pipeline.py discover
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+      - name: Upload review queue
+        uses: actions/upload-artifact@v4
+        with:
+          name: jordan-review-candidates
+          path: review/candidates.json
+          retention-days: 14
