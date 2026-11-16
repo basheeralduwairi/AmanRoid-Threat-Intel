@@ -65,6 +65,20 @@ draft errors.
 4. Commit the resulting `review/approved.json` change through a reviewed pull
    request. The Pages workflow validates approval again before deployment.
 
+To reject a candidate without publishing it, use the explicit rejection command
+and commit `review/rejections.json` through a pull request:
+
+```bash
+python scripts/review.py reject DRAFT_ID \
+  --reviewer "reviewer-id" \
+  --reason "The record is a navigation page, not an advisory." \
+  --confirm-not-publish
+```
+
+`review-validation.yml` checks approval/rejection files on pull requests and
+rejects conflicting decisions. A rejected record can never be published by the
+Pages workflow.
+
 The helper refuses drafts without AI output, evidence hashes, or the explicit
 confirmation flag. `active_in_jordan=true` additionally requires confirmed
 official evidence and `confirmed_jordan` geographic relevance.
@@ -102,3 +116,15 @@ require this feed for scanning or education features.
 - Official sources may change layout or block automated retrieval. The source
   status artifact reports failures; it never treats a failed collection as an
   absence of threats.
+
+## Current source assessment
+
+The initial six-record queue was not publication-ready: five records were
+NCSC list/navigation pages and one was the CBJ security-marks navigation page;
+the latter also exposed a Unicode URL encoding problem. The collector now
+targets NCSC `/ListDetails/...` advisory pages, preserves their original dates,
+and uses an in-memory cookie jar plus UTF-8 URL canonicalization for the
+official Jo-FinCERT alerts page. The eight NCSC records currently discovered
+are genuine official advisory pages but date from 2022, so they are classified
+as historical/stale and cannot be approved as active current incidents. The
+current Jo-FinCERT alerts section contains no alert detail records.

@@ -99,6 +99,20 @@ class PipelineTests(unittest.TestCase):
             finally:
                 pipeline.ROOT = old_root
 
+    def test_stale_advisory_cannot_be_published_as_active(self):
+        record = approved_record(
+            published_at="2020-01-01T00:00:00Z",
+            evidence_status="confirmed_official_advisory",
+            geographic_relevance="confirmed_jordan",
+            active_in_jordan=True,
+            lifecycle={"status": "historical"},
+        )
+        with self.assertRaisesRegex(ValueError, "Outdated"):
+            pipeline.validated(record, {"ncsc-jordan": source()})
+
+    def test_lifecycle_for_old_source_is_historical(self):
+        self.assertEqual(pipeline.lifecycle_for("2020-01-01T00:00:00Z")["status"], "historical")
+
     def test_empty_publish_is_valid_and_nonfictional(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

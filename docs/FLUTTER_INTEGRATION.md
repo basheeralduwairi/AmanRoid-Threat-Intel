@@ -31,6 +31,8 @@ credentials.
    unavailable state; do not invent advisories.
 8. Treat `freshness.status == "stale"` and `lifecycle.status == "historical"`
    as display metadata, not as current threat claims.
+9. Reject duplicate advisory IDs, malformed evidence, non-HTTPS source links,
+   and schema versions that the app does not understand.
 
 ## Schema summary
 
@@ -69,3 +71,6 @@ AI drafts are written to `review/drafts.json` and are never in the public feed.
 An authorized human must inspect the original source and evidence, run the
 explicit approval helper or edit `review/approved.json` in a reviewed pull
 request, and only then may the Pages workflow publish the feed.
+
+The Flutter integration is intentionally read-only. It does not authenticate,
+upload device data, call a backend, or store enrollment keys in the feed cache.

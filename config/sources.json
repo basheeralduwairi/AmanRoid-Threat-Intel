@@ -10,6 +10,7 @@
       "language": "ar",
       "trust_level": "official_jordanian_source",
       "collection_method": "public_html_index_then_article",
+      "article_path_prefixes": ["/AR/ListDetails/Security_Warnings_AR/"],
       "collect_article": true,
       "max_candidates": 8,
       "enabled": true
@@ -17,12 +18,13 @@
     {
       "id": "jofincert",
       "name_ar": "Jo-FinCERT - البنك المركزي الأردني",
-      "url": "https://www.cbj.gov.jo/AR/Pages/JoFinCert",
-      "allowed_hosts": ["www.cbj.gov.jo", "cbj.gov.jo"],
+      "url": "https://fincert.cbj.gov.jo/AR/List/التنبيهات",
+      "allowed_hosts": ["fincert.cbj.gov.jo"],
       "country": "JO",
       "language": "ar",
       "trust_level": "official_jordanian_source",
-      "collection_method": "public_html_index_then_article",
+      "collection_method": "cookie_aware_public_html_index_then_article",
+      "article_path_prefixes": ["/AR/ListDetails/"],
       "collect_article": true,
       "max_candidates": 8,
       "enabled": true

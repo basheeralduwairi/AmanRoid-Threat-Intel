@@ -1,36 +1,36 @@
 {
-  "checked_at": "2026-11-16T07:36:12Z",
+  "checked_at": "2026-11-16T08:43:38Z",
   "schema_version": 1,
   "sources": [
     {
       "article_failures": 0,
       "bytes": 212853,
-      "candidate_count": 5,
-      "checked_at": "2026-11-16T07:36:03Z",
+      "candidate_count": 8,
+      "checked_at": "2026-11-16T08:43:31Z",
       "content_type": "text/html; charset=utf-8",
       "error": null,
       "final_url": "https://ncsc.jo/AR/List/Security_Warnings_AR",
       "http_status": 200,
-      "latency_ms": 1127,
+      "latency_ms": 1064,
       "name_ar": "المركز الوطني للأمن السيبراني الأردني",
       "source_id": "ncsc-jordan",
       "status": "ok",
       "url": "https://ncsc.jo/AR/List/Security_Warnings_AR"
     },
     {
-      "article_failures": 1,
-      "bytes": 264451,
-      "candidate_count": 1,
-      "checked_at": "2026-11-16T07:36:11Z",
+      "article_failures": 0,
+      "bytes": 137574,
+      "candidate_count": 0,
+      "checked_at": "2026-11-16T08:43:36Z",
       "content_type": "text/html; charset=utf-8",
       "error": null,
-      "final_url": "https://www.cbj.gov.jo/AR/Pages/JoFinCert",
+      "final_url": "https://fincert.cbj.gov.jo/AR/List/%d8%a7%d9%84%d8%aa%d9%86%d8%a8%d9%8a%d9%87%d8%a7%d8%aa?AspxAutoDetectCookieSupport=1",
       "http_status": 200,
-      "latency_ms": 1441,
+      "latency_ms": 1244,
       "name_ar": "Jo-FinCERT - البنك المركزي الأردني",
       "source_id": "jofincert",
       "status": "ok",
-      "url": "https://www.cbj.gov.jo/AR/Pages/JoFinCert"
+      "url": "https://fincert.cbj.gov.jo/AR/List/التنبيهات"
     }
   ]
 }

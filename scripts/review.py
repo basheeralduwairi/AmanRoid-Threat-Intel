@@ -33,6 +33,10 @@ def approve(draft_id: str, reviewer: str, notes: str, confirm_source: bool, acti
         "category": draft["category"],
         "country": "JO",
         "source_id": draft["source_id"],
+        "source_name_ar": next(
+            (item.get("name_ar", draft["source_id"]) for item in configured.get("sources", []) if item.get("id") == draft["source_id"]),
+            draft["source_id"],
+        ),
         "source_url": draft["source_url"],
         "published_at": draft.get("published_at"),
         "publication_date_status": draft.get("publication_date_status", "unknown"),
@@ -65,6 +69,50 @@ def approve(draft_id: str, reviewer: str, notes: str, confirm_source: bool, acti
     print(f"Approved {draft_id} for publication review; run the publish workflow separately.")
 
 
+def reject(draft_id: str, reviewer: str, reason: str, confirm_not_publish: bool) -> None:
+    if not confirm_not_publish:
+        raise SystemExit("Rejection requires --confirm-not-publish after checking the source and recording the reason.")
+    drafts = pipeline.load(pipeline.ROOT / "review/drafts.json").get("drafts", [])
+    draft = next((item for item in drafts if item.get("id") == draft_id), None)
+    if not draft:
+        raise SystemExit(f"Draft not found: {draft_id}")
+    if not reason.strip():
+        raise SystemExit("A rejection reason is required")
+    path = pipeline.ROOT / "review/rejections.json"
+    existing = pipeline.load(path) if path.exists() else {"schema_version": 1, "decisions": []}
+    decisions = [item for item in existing.get("decisions", []) if item.get("id") != draft_id]
+    decisions.append({
+        "id": draft_id,
+        "decision": "rejected",
+        "reviewer": reviewer,
+        "reviewed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "reason": reason.strip(),
+        "publication_allowed": False,
+    })
+    pipeline.write_json(path, {"schema_version": 1, "decisions": decisions})
+    print(f"Rejected {draft_id}; it cannot enter the public feed.")
+
+
+def validate_review_files() -> None:
+    configured = pipeline.load(pipeline.ROOT / "config/sources.json")
+    sources = {item["id"]: item for item in configured.get("sources", [])}
+    approved = pipeline.load(pipeline.ROOT / "review/approved.json").get("advisories", [])
+    rejections = pipeline.load(pipeline.ROOT / "review/rejections.json").get("decisions", [])
+    approved_ids = {item.get("id") for item in approved}
+    rejected_ids = {item.get("id") for item in rejections if item.get("decision") == "rejected"}
+    if None in approved_ids or None in rejected_ids:
+        raise SystemExit("Every review record requires an id")
+    overlap = approved_ids & rejected_ids
+    if overlap:
+        raise SystemExit(f"Review records cannot be both approved and rejected: {sorted(overlap)}")
+    for item in approved:
+        pipeline.validated(item, sources, require_approved=True)
+    for item in rejections:
+        if item.get("decision") != "rejected" or not item.get("reviewer") or not item.get("reason"):
+            raise SystemExit("Invalid rejection record")
+    print(f"Validated {len(approved)} approvals and {len(rejections)} rejection decisions")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
@@ -74,8 +122,19 @@ def main() -> None:
     approve_parser.add_argument("--notes", required=True)
     approve_parser.add_argument("--confirm-original-source", action="store_true")
     approve_parser.add_argument("--active-in-jordan", choices=("true", "false", "unknown"), default="unknown")
+    reject_parser = sub.add_parser("reject")
+    reject_parser.add_argument("draft_id")
+    reject_parser.add_argument("--reviewer", required=True)
+    reject_parser.add_argument("--reason", required=True)
+    reject_parser.add_argument("--confirm-not-publish", action="store_true")
+    sub.add_parser("validate")
     args = parser.parse_args()
-    approve(args.draft_id, args.reviewer, args.notes, args.confirm_original_source, args.active_in_jordan)
+    if args.command == "approve":
+        approve(args.draft_id, args.reviewer, args.notes, args.confirm_original_source, args.active_in_jordan)
+    elif args.command == "reject":
+        reject(args.draft_id, args.reviewer, args.reason, args.confirm_not_publish)
+    else:
+        validate_review_files()
 
 
 if __name__ == "__main__":

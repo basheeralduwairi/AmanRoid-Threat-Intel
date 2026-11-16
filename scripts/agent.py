@@ -34,11 +34,17 @@ def prompt_for(candidate: dict) -> str:
 - لا تخترع حملة أو جهة أو تاريخاً أو أثراً في الأردن.
 - لا تقل إن تهديداً نشط في الأردن إلا إذا كان ذلك صريحاً في الدليل، وحتى عند ذلك اجعل المراجعة البشرية إلزامية.
 - لا تغيّر الرابط الأصلي أو تاريخ النشر أو الدليل؛ هذه القيم تأتي من النظام وليست من إجابتك.
+- استخدم اسم الجهة ومحتوى المصدر كما هو، ولا تنسب الحادث إلى الأردن إلا إذا ذكر المصدر ذلك صراحة.
+- إذا كان تاريخ النشر غير معروف، اذكر في الصياغة أن التاريخ غير متحقق ولا تستنتج تاريخاً من تاريخ الاسترجاع.
 - استخدم مستوى ثقة منخفضاً أو غير مقيم عندما تكون الأدلة محدودة.
 - أعد JSON فقط بالمفاتيح: title_ar, summary_ar, guidance_ar, category, geographic_relevance, confidence_level, confidence_rationale, evidence_status.
 - category يجب أن يكون واحداً من: phishing, financial_fraud, malicious_apps, account_takeover, general.
 - geographic_relevance يجب أن يكون واحداً من: confirmed_jordan, potentially_relevant_global, not_jordan_specific, unknown.
 - evidence_status يجب أن يكون confirmed_official_advisory أو general_awareness أو needs_human_review.
+
+SYSTEM_OWNED_FACTS_START
+{{"source_id": {json.dumps(candidate.get("source_id"), ensure_ascii=False)}, "source_url": {json.dumps(candidate.get("source_url"), ensure_ascii=False)}, "published_at": {json.dumps(candidate.get("published_at"), ensure_ascii=False)}, "publication_date_status": {json.dumps(candidate.get("publication_date_status", "unknown"), ensure_ascii=False)}, "source_name_ar": {json.dumps(candidate.get("source_name_ar"), ensure_ascii=False)}, "source_country": {json.dumps(candidate.get("source_country"), ensure_ascii=False)}}}
+SYSTEM_OWNED_FACTS_END
 
 UNTRUSTED_SOURCE_MATERIAL_START
 {material}
@@ -109,6 +115,9 @@ def safe_fields(raw: dict) -> dict:
     for key in ("title_ar", "summary_ar", "guidance_ar", "confidence_rationale"):
         if not isinstance(fields[key], str) or not fields[key].strip():
             raise ValueError(f"AI draft missing {key}")
+    limits = {"title_ar": 300, "summary_ar": 2400, "guidance_ar": 2400, "confidence_rationale": 600}
+    for key, limit in limits.items():
+        fields[key] = fields[key].strip()[:limit]
     if fields["category"] not in pipeline.ALLOWED_CATEGORIES:
         raise ValueError("AI draft used an unsupported category")
     if fields["geographic_relevance"] not in pipeline.GEOGRAPHIC_RELEVANCE:

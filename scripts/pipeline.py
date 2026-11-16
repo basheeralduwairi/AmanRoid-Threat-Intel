@@ -17,6 +17,7 @@ import re
 import time
 import urllib.parse
 import urllib.request
+from http.cookiejar import CookieJar
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_VERSION = 2
@@ -74,11 +75,16 @@ def canonical_url(url: str) -> str:
     host = parsed.hostname.lower().rstrip(".")
     port = parsed.port
     netloc = host if port in (None, 443) else f"{host}:{port}"
-    path = parsed.path or "/"
+    path = urllib.parse.quote(parsed.path or "/", safe="/%:@!$&'()*+,;=-._~")
     if path != "/":
         path = re.sub(r"/{2,}", "/", path).rstrip("/") or "/"
     query = urllib.parse.urlencode(sorted(urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)))
     return urllib.parse.urlunsplit(("https", netloc, path, query, ""))
+
+
+def make_opener():
+    """Create an in-memory cookie-aware opener; cookies are never persisted."""
+    return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()))
 
 
 def is_allowed(url: str, source: dict) -> bool:
@@ -122,6 +128,11 @@ class ArticleParser(HTMLParser):
         self.parts: list[str] = []
         self.title_parts: list[str] = []
         self.meta_dates: list[str] = []
+        self.visible_dates: list[str] = []
+        self.main_parts: list[str] = []
+        self.main_title_parts: list[str] = []
+        self._main_depth = 0
+        self._heading_depth = 0
         self._skip = 0
         self._in_title = False
 
@@ -132,6 +143,12 @@ class ArticleParser(HTMLParser):
             self._skip += 1
         if tag == "title":
             self._in_title = True
+        if self._main_depth == 0 and attrs_map.get("id") == "MainContent_DivContent":
+            self._main_depth = 1
+        elif self._main_depth:
+            self._main_depth += 1
+        if self._main_depth and tag in {"h1", "h2", "h3", "h4", "h5"}:
+            self._heading_depth += 1
         if tag in {"meta", "time"}:
             value = attrs_map.get("content") or attrs_map.get("datetime")
             key = (attrs_map.get("property") or attrs_map.get("name") or "").lower()
@@ -144,6 +161,10 @@ class ArticleParser(HTMLParser):
             self._skip -= 1
         if tag == "title":
             self._in_title = False
+        if self._heading_depth and tag in {"h1", "h2", "h3", "h4", "h5"}:
+            self._heading_depth -= 1
+        if self._main_depth and tag not in {"meta", "link", "img", "input", "br", "hr"}:
+            self._main_depth -= 1
 
     def handle_data(self, data) -> None:
         if self._skip:
@@ -153,26 +174,43 @@ class ArticleParser(HTMLParser):
             self.parts.append(value)
             if self._in_title:
                 self.title_parts.append(value)
+            if self._main_depth:
+                self.main_parts.append(value)
+                if self._heading_depth:
+                    self.main_title_parts.append(value)
+                if re.search(r"(?:20\d{2}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]20\d{2})", value):
+                    self.visible_dates.append(value)
 
 
 def extract_date(values: list[str]) -> str | None:
+    translation = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
     for value in values:
-        match = re.search(r"20\d{2}[-/]\d{1,2}[-/]\d{1,2}", value)
+        normalized = value.translate(translation)
+        match = re.search(r"20\d{2}[-/]\d{1,2}[-/]\d{1,2}", normalized)
         if match:
             raw = match.group(0).replace("/", "-")
             try:
                 return datetime.strptime(raw, "%Y-%m-%d").date().isoformat()
             except ValueError:
                 pass
+        match = re.search(r"\d{1,2}[-/]\d{1,2}[-/]20\d{2}", normalized)
+        if match:
+            raw = match.group(0).replace("/", "-")
+            try:
+                return datetime.strptime(raw, "%d-%m-%Y").date().isoformat()
+            except ValueError:
+                pass
     return None
 
 
-def fetch_public(url: str, source: dict, max_bytes: int) -> dict:
+def fetch_public(url: str, source: dict, max_bytes: int, opener=None, referer: str | None = None) -> dict:
     if not is_allowed(url, source):
         raise ValueError("URL is outside the configured HTTPS source allowlist")
-    request = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "text/html,application/xhtml+xml"})
+    request = urllib.request.Request(canonical_url(url), headers={"User-Agent": UA, "Accept": "text/html,application/xhtml+xml"})
+    if referer:
+        request.add_header("Referer", canonical_url(referer))
     started = time.monotonic()
-    with urllib.request.urlopen(request, timeout=20) as response:
+    with (opener or make_opener()).open(request, timeout=20) as response:
         final_url = response.geturl()
         content_type = response.headers.get("Content-Type", "").lower()
         if not is_allowed(final_url, source):
@@ -192,16 +230,18 @@ def fetch_public(url: str, source: dict, max_bytes: int) -> dict:
         }
 
 
-def extract_article(url: str, source: dict) -> dict:
-    fetched = fetch_public(url, source, MAX_ARTICLE_BYTES)
+def extract_article(url: str, source: dict, opener=None, referer: str | None = None) -> dict:
+    fetched = fetch_public(url, source, MAX_ARTICLE_BYTES, opener=opener, referer=referer)
     parser = ArticleParser()
     parser.feed(fetched["body"].decode("utf-8", errors="replace"))
-    text = " ".join(parser.parts)
+    text_parts = parser.main_parts or parser.parts
+    title_parts = parser.main_title_parts[:1] or parser.title_parts
+    text = " ".join(text_parts)
     return {
         "original_url": fetched["final_url"],
         "retrieved_at": now_iso(),
-        "published_at": extract_date(parser.meta_dates),
-        "title": " ".join(parser.title_parts)[:300],
+        "published_at": extract_date(parser.meta_dates + parser.visible_dates),
+        "title": " ".join(title_parts)[:300],
         "excerpt": text[:4000],
         "content_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         "content_type": fetched["content_type"],
@@ -212,6 +252,21 @@ def extract_article(url: str, source: dict) -> dict:
 
 def candidate_id(source_id: str, url: str) -> str:
     return hashlib.sha256(f"{source_id}|{url}".encode("utf-8")).hexdigest()[:24]
+
+
+def matches_article_path(url: str, source: dict) -> bool:
+    prefixes = [str(value).lower() for value in source.get("article_path_prefixes", []) if value]
+    if not prefixes:
+        return False
+    path = urllib.parse.urlsplit(url).path.lower()
+    return any(path.startswith(prefix) for prefix in prefixes)
+
+
+def lifecycle_for(published_at: str | None) -> dict:
+    published = parse_datetime(published_at)
+    if published and (datetime.now(timezone.utc) - published).days > 30:
+        return {"status": "historical"}
+    return {"status": "current"}
 
 
 def discover() -> None:
@@ -243,7 +298,8 @@ def discover() -> None:
             source_status.append(status)
             continue
         try:
-            index = fetch_public(source["url"], source, MAX_INDEX_BYTES)
+            opener = make_opener()
+            index = fetch_public(source["url"], source, MAX_INDEX_BYTES, opener=opener)
             parser = LinkParser()
             parser.feed(index["body"].decode("utf-8", errors="replace"))
             status.update(
@@ -260,7 +316,11 @@ def discover() -> None:
                 url = canonical_url(urllib.parse.urljoin(source["url"], href or ""))
                 if not url or url in seen_urls or url == canonical_url(source["url"]):
                     continue
-                if not title or not any(keyword in title.lower() for keyword in KEYWORDS) or not is_allowed(url, source):
+                detail_link = matches_article_path(url, source)
+                keyword_link = title and any(keyword in title.lower() for keyword in KEYWORDS)
+                if (not detail_link and not keyword_link) or not is_allowed(url, source):
+                    continue
+                if source.get("article_path_prefixes") and not detail_link:
                     continue
                 seen_urls.add(url)
                 eligible.append((url, title[:300]))
@@ -279,7 +339,7 @@ def discover() -> None:
                 }
                 try:
                     if source.get("collect_article", True):
-                        evidence.update(extract_article(url, source))
+                        evidence.update(extract_article(url, source, opener=opener, referer=index["final_url"]))
                 except Exception as exc:
                     status["article_failures"] += 1
                     evidence["collection_error"] = f"{type(exc).__name__}: {str(exc)[:180]}"
@@ -288,6 +348,7 @@ def discover() -> None:
                 duplicate_of = fingerprints.get(fingerprint)
                 if not duplicate_of:
                     fingerprints[fingerprint] = item_id
+                candidate_title = evidence.get("title") or title
                 candidates[item_id] = {
                     "schema_version": SCHEMA_VERSION,
                     "id": item_id,
@@ -296,14 +357,18 @@ def discover() -> None:
                     "source_country": source.get("country", "unknown"),
                     "source_trust_level": source.get("trust_level", "unassessed"),
                     "source_url": url,
-                    "title_from_source": title,
+                    "title_from_source": candidate_title[:300],
                     "evidence": [evidence],
                     "published_at": evidence.get("published_at"),
                     "publication_date_status": "observed" if evidence.get("published_at") else "unknown",
                     "geographic_relevance": "unknown",
                     "confidence": {"level": "unassessed", "score": None, "rationale": "لم تُراجع المادة بعد من محرر بشري."},
                     "review": {"status": "ai_draft_pending", "reviewed_by": None, "reviewed_at": None},
-                    "lifecycle": {"status": "current", "first_seen_at": now_iso(), "last_seen_at": now_iso()},
+                    "lifecycle": {
+                        **lifecycle_for(evidence.get("published_at")),
+                        "first_seen_at": now_iso(),
+                        "last_seen_at": now_iso(),
+                    },
                     "status": "duplicate" if duplicate_of else "pending_review",
                     "duplicate_of": duplicate_of,
                 }
@@ -377,6 +442,8 @@ def validated(record: dict, sources: dict[str, dict], require_approved: bool = T
             raise ValueError("Evidence must preserve retrieved_at")
     if record.get("geographic_relevance") not in GEOGRAPHIC_RELEVANCE:
         raise ValueError("Invalid geographic_relevance")
+    if record.get("geographic_relevance") == "confirmed_jordan" and record.get("evidence_status") != "confirmed_official_advisory":
+        raise ValueError("Confirmed Jordan relevance requires confirmed official evidence")
     confidence = record.get("confidence")
     if not isinstance(confidence, dict) or confidence.get("level") not in CONFIDENCE_LEVELS:
         raise ValueError("Invalid confidence indicator")
@@ -394,10 +461,15 @@ def validated(record: dict, sources: dict[str, dict], require_approved: bool = T
         raise ValueError("Active Jordan claims require confirmed official evidence")
     if active not in (True, False, None):
         raise ValueError("active_in_jordan must be true, false, or null")
+    freshness = freshness_for(record)
+    if active is True and freshness["status"] != "fresh":
+        raise ValueError("Outdated or undated records cannot be published as active incidents")
     entry = dict(record)
     entry["schema_version"] = SCHEMA_VERSION
+    entry["source_name_ar"] = source.get("name_ar", record["source_id"])
+    entry["source_trust_level"] = source.get("trust_level", "unassessed")
     entry["category_ar"] = CATEGORY_AR[record["category"]]
-    entry["freshness"] = freshness_for(record)
+    entry["freshness"] = freshness
     entry["publication"] = {"status": "approved", "approved_at": review.get("reviewed_at"), "approved_by": review.get("reviewed_by")}
     return entry
 
@@ -406,10 +478,14 @@ def publish() -> None:
     configured = load(ROOT / "config/sources.json")
     sources = {item["id"]: item for item in configured.get("sources", [])}
     approved = load(ROOT / "review/approved.json").get("advisories", [])
+    rejected = load(ROOT / "review/rejections.json").get("decisions", []) if (ROOT / "review/rejections.json").exists() else []
+    rejected_ids = {item.get("id") for item in rejected if item.get("decision") == "rejected"}
     result: list[dict] = []
     ids: set[str] = set()
     fingerprints: set[str] = set()
     for item in approved:
+        if item.get("id") in rejected_ids:
+            raise ValueError(f"Advisory cannot be both approved and rejected: {item.get('id')}")
         entry = validated(item, sources, require_approved=True)
         if entry["id"] in ids:
             raise ValueError(f"Duplicate advisory id: {entry['id']}")
