@@ -8,7 +8,7 @@ permissions:
 jobs:
   discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -16,11 +16,20 @@ jobs:
           python-version: '3.12'
       - name: Discover public source links (unverified)
         run: python scripts/pipeline.py discover
+      - name: Prepare non-publishing Arabic AI drafts
+        env:
+          THREAT_INTEL_AI_ENDPOINT: ${{ secrets.THREAT_INTEL_AI_ENDPOINT }}
+          THREAT_INTEL_AI_API_KEY: ${{ secrets.THREAT_INTEL_AI_API_KEY }}
+          THREAT_INTEL_AI_MODEL: ${{ vars.THREAT_INTEL_AI_MODEL }}
+        run: python scripts/agent.py draft
       - name: Tests
         run: python -m unittest discover -s tests -v
       - name: Upload review queue
         uses: actions/upload-artifact@v4
         with:
-          name: jordan-review-candidates
-          path: review/candidates.json
+          name: jordan-review-queue
+          path: |
+            review/candidates.json
+            review/drafts.json
+            review/source-status.json
           retention-days: 14

@@ -29,6 +29,18 @@ jobs:
           python-version: '3.12'
       - run: python -m unittest discover -s tests -v
       - run: python scripts/pipeline.py publish
+      - name: Verify feed contains only approved records
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          feed = json.loads(Path('site/data/advisories.json').read_text())
+          assert feed['publication']['human_approval_required'] is True
+          for item in feed['advisories']:
+              assert item['review']['status'] == 'human_approved'
+              assert item['publication']['status'] == 'approved'
+          print('verified', len(feed['advisories']), 'reviewed advisories')
+          PY
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -1,37 +1,104 @@
-# AmanRoid Threat Intelligence — Jordan MVP
+# AmanRoid Threat Intelligence — Jordan
 
-**A separate static, review-gated advisory site** intended for AmanRoid Flutter. This is an initial working foundation, **not yet an autonomous AI analyst**. Nothing is automatically asserted to be a verified or currently active Jordanian threat.
+Public Arabic RTL advisory site and read-only JSON feed for AmanRoid. The
+repository is deliberately separate from the Android application.
 
-## Included
-- Official public Jordanian source allowlist (`config/sources.json`).
-- Daily GitHub Actions HTML link discovery into an **unverified review artifact**, not into the public advisory feed.
-- `review/approved.json` as the sole publication source. Human reviewer must verify content, publication date, source and factual active-in-Jordan status.
-- Generated `site/data/advisories.json` and Arabic static HTML page.
-- Tests preventing unsafe source domains and unreviewed activation.
+## Safety boundary
 
-## Local use (Python 3.10+, standard library only)
+- Only configured HTTPS allowlisted sources are collected.
+- Remote HTML is untrusted evidence; source text cannot issue instructions to
+  the collector or AI agent.
+- Discovery writes an unverified queue. The optional AI agent writes Arabic
+  drafts only; it cannot publish and has no GitHub write credential.
+- `review/approved.json` is the sole publication input. Every published record
+  requires an explicit human approval record, preserved evidence, source URL,
+  dates, geography, confidence, and review status.
+- An empty approved set produces a valid empty feed. No simulated or fictional
+  threat is published.
+
+## Local commands
+
+Requires Python 3.10+ and the standard library only:
+
 ```bash
-python scripts/pipeline.py discover   # Network access, public pages only
-python scripts/pipeline.py publish    # Never publishes unapproved candidates
+python scripts/pipeline.py discover
+python scripts/agent.py draft
 python -m unittest discover -s tests -v
+python scripts/pipeline.py publish
 python -m http.server --directory site 8000
 ```
 
-## Deploy
-1. Create a **separate repository** for public advisory content (e.g. `AmanRoid-Threat-Intel`) rather than exposing private Android source.
-2. Add these files to the new repository. Set its default branch to `main` (or adjust workflow).
-3. Enable GitHub Pages with source **GitHub Actions**.
-4. Run `Jordan advisory discovery (review required)` manually to inspect a candidate artifact.
-5. Verify any actual advisory from authoritative original sources; add a documented approved record in `review/approved.json` and review it in a pull request. Never copy claims from untrusted page snippets verbatim into trusted output.
-6. Run `Publish reviewed Jordan advisories` and open the Pages URL. Use `/data/advisories.json` as the future read-only Flutter data endpoint.
+`discover` may access the configured official public pages. It records source
+status, collection failures, article evidence, publication-date observations,
+content hashes, duplicate relationships, and an unverified candidate queue.
 
-## Reviewer record example (NOT for publication without real evidence)
-Fields: `id`, `title_ar`, `summary_ar`, `guidance_ar`, `category` (`phishing`, `financial_fraud`, `malicious_apps`, `account_takeover`, `general`), `country` (`JO`), `source_id`, `source_url`, `published_at` and `reviewed_at` (ISO 8601), `reviewed_by`, `evidence_status` (`confirmed_official_advisory` or `general_awareness`), optional `active_in_jordan` boolean.
+`agent.py` uses no provider by default. To enable an explicitly approved
+OpenAI-compatible endpoint locally or in GitHub Actions, provide secrets or
+environment variables without committing them:
 
-## Security limitations and next tasks
-- Link discovery is *not* article extraction, evidence verification, a fully reliable crawler, or LLM summarization. Official sites can change layouts and disallow automated requests. Respect site terms and robots rules; move to approved RSS/API when available.
-- Current validation establishes publisher allowlist and basic record completeness; future releases should add stronger source-specific provenance, public feed signing, approval audit records, timestamps for **actual** campaign activity, structured threat lifecycle and anti-replay.
-- No advisory is active by default. A historical official page is not evidence of a **current** campaign.
-- Hosted JSON may be cached and must use safe error handling in Flutter. Validate schema and caps, avoid remote HTML, use last-good cache and stale indicators. Downloading public advisories should require no device identifiers.
-- GitHub schedule can be delayed or skipped; production monitoring should alarm on stale feeds, not claim timely delivery when not checked.
-- For AI agent: add optional summary-drafting into a separate candidate field, requiring editorial review; never grant AI a direct publish credential.
+```text
+THREAT_INTEL_AI_ENDPOINT=https://provider.example/v1/chat/completions
+THREAT_INTEL_AI_API_KEY=provided-out-of-band
+THREAT_INTEL_AI_MODEL=approved-model-name
+```
+
+No paid AI service is enabled in the repository. The endpoint is contacted only
+when both endpoint and key are present. Provider failures remain non-published
+draft errors.
+
+## Human approval procedure
+
+1. Run the daily discovery workflow or inspect its `jordan-review-queue`
+   artifact.
+2. Review the original source URL, evidence excerpt/hash, publication date,
+   geographic relevance, confidence, and wording.
+3. Approve explicitly with the helper after checking the source independently:
+
+   ```bash
+   python scripts/review.py approve DRAFT_ID \
+     --reviewer "reviewer-id" \
+     --notes "Checked the original source and evidence." \
+     --confirm-original-source \
+     --active-in-jordan unknown
+   ```
+
+4. Commit the resulting `review/approved.json` change through a reviewed pull
+   request. The Pages workflow validates approval again before deployment.
+
+The helper refuses drafts without AI output, evidence hashes, or the explicit
+confirmation flag. `active_in_jordan=true` additionally requires confirmed
+official evidence and `confirmed_jordan` geographic relevance.
+
+## GitHub Actions and Pages
+
+- `daily-threat-discovery.yml` runs on schedule or manually, collects sources,
+  prepares non-publishing drafts, runs tests, and uploads the review queue.
+- `publish-site.yml` runs on reviewed changes to `main`, validates every record,
+  generates the feed, verifies that every entry is human-approved, and deploys
+  `site/` through GitHub Pages.
+- Optional Actions configuration uses `THREAT_INTEL_AI_ENDPOINT` and
+  `THREAT_INTEL_AI_API_KEY` secrets plus `THREAT_INTEL_AI_MODEL` repository
+  variable. These are not required for collection or publication of an empty
+  feed.
+
+Website: `https://basheeralduwairi.github.io/AmanRoid-Threat-Intel/`
+
+Feed: `https://basheeralduwairi.github.io/AmanRoid-Threat-Intel/data/advisories.json`
+
+## Flutter integration
+
+See [`docs/FLUTTER_INTEGRATION.md`](docs/FLUTTER_INTEGRATION.md) for HTTPS
+retrieval, schema validation, last-known-good caching, stale indicators, and
+offline behavior. The Android application remains independent and does not
+require this feed for scanning or education features.
+
+## Remaining configuration
+
+- GitHub Pages must be enabled for the repository with the GitHub Actions
+  source; the deployment workflow performs the actual deployment.
+- An AI provider secret is optional and requires separate approval. Until set,
+  the daily workflow records `awaiting_ai_provider` drafts and publishes
+  nothing.
+- Official sources may change layout or block automated retrieval. The source
+  status artifact reports failures; it never treats a failed collection as an
+  absence of threats.

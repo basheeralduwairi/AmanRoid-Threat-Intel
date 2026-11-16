@@ -10,4 +10,6 @@ __pycache__/
 *.keystore
 review/raw/
 review/private/
+review/candidates.json
+review/drafts.json
 site/.DS_Store

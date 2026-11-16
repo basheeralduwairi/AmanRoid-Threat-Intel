@@ -1,6 +1,31 @@
 {
+  "schema_version": 1,
   "sources": [
-    {"id":"ncsc-jordan", "name_ar":"المركز الوطني للأمن السيبراني الأردني", "url":"https://ncsc.jo/AR/List/Security_Warnings_AR", "host":"ncsc.jo", "country":"JO", "enabled":true},
-    {"id":"jofincert", "name_ar":"Jo-FinCERT - البنك المركزي الأردني", "url":"https://www.cbj.gov.jo/AR/Pages/JoFinCert", "host":"www.cbj.gov.jo", "country":"JO", "enabled":true}
+    {
+      "id": "ncsc-jordan",
+      "name_ar": "المركز الوطني للأمن السيبراني الأردني",
+      "url": "https://ncsc.jo/AR/List/Security_Warnings_AR",
+      "allowed_hosts": ["ncsc.jo"],
+      "country": "JO",
+      "language": "ar",
+      "trust_level": "official_jordanian_source",
+      "collection_method": "public_html_index_then_article",
+      "collect_article": true,
+      "max_candidates": 8,
+      "enabled": true
+    },
+    {
+      "id": "jofincert",
+      "name_ar": "Jo-FinCERT - البنك المركزي الأردني",
+      "url": "https://www.cbj.gov.jo/AR/Pages/JoFinCert",
+      "allowed_hosts": ["www.cbj.gov.jo", "cbj.gov.jo"],
+      "country": "JO",
+      "language": "ar",
+      "trust_level": "official_jordanian_source",
+      "collection_method": "public_html_index_then_article",
+      "collect_article": true,
+      "max_candidates": 8,
+      "enabled": true
+    }
   ]
 }

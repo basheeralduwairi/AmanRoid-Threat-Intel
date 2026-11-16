@@ -1,0 +1,36 @@
+{
+  "checked_at": "2026-11-16T07:36:12Z",
+  "schema_version": 1,
+  "sources": [
+    {
+      "article_failures": 0,
+      "bytes": 212853,
+      "candidate_count": 5,
+      "checked_at": "2026-11-16T07:36:03Z",
+      "content_type": "text/html; charset=utf-8",
+      "error": null,
+      "final_url": "https://ncsc.jo/AR/List/Security_Warnings_AR",
+      "http_status": 200,
+      "latency_ms": 1127,
+      "name_ar": "المركز الوطني للأمن السيبراني الأردني",
+      "source_id": "ncsc-jordan",
+      "status": "ok",
+      "url": "https://ncsc.jo/AR/List/Security_Warnings_AR"
+    },
+    {
+      "article_failures": 1,
+      "bytes": 264451,
+      "candidate_count": 1,
+      "checked_at": "2026-11-16T07:36:11Z",
+      "content_type": "text/html; charset=utf-8",
+      "error": null,
+      "final_url": "https://www.cbj.gov.jo/AR/Pages/JoFinCert",
+      "http_status": 200,
+      "latency_ms": 1441,
+      "name_ar": "Jo-FinCERT - البنك المركزي الأردني",
+      "source_id": "jofincert",
+      "status": "ok",
+      "url": "https://www.cbj.gov.jo/AR/Pages/JoFinCert"
+    }
+  ]
+}
